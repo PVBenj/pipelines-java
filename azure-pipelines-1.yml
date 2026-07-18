@@ -1,0 +1,62 @@
+trigger:
+- main
+- releases/*
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: Build
+  displayName: 'Build Stage'
+  jobs:
+  - job: Build
+    displayName: 'Build Job'
+    steps:
+    - task: Maven@4
+      inputs:
+        mavenPomFile: 'pom.xml'
+        mavenOptions: '-Xmx3072m'
+        javaHomeOption: 'JDKVersion'
+        jdkVersionOption: '1.11'
+        jdkArchitectureOption: 'x64'
+        publishJUnitResults: false
+        testResultsFiles: '**/surefire-reports/TEST-*.xml'
+        goals: 'package'
+    
+    - task: PublishCodeCoverageResults@2
+      inputs:
+        summaryFileLocation: "$(System.DefaultWorkingDirectory)/**/site/jacoco/jacoco.xml" # Path to summary files
+        reportDirectory: "$(System.DefaultWorkingDirectory)/**/site/jacoco" # Path to report directory
+        failIfCoverageEmpty: true # Fail if code coverage results are missing
+- stage: Test
+  displayName: 'Test Stage'
+  dependsOn: Build
+  isSkippable: false
+  jobs:
+  - job: TestJob
+    displayName: 'Test Job'
+    steps:
+    - script: echo "Running unit tests..."
+      displayName: 'Run Unit Tests'
+- stage: DeployToStaging
+  displayName: 'Deploy to Staging'
+  dependsOn: Test
+  jobs:
+  - job: DeployStagingJob
+    displayName: 'Deploy to Staging Job'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - script: echo "Build staging job..."
+      displayName: 'Build and deploy to staging'
+  - job: DeployStagingJobWithValidation
+    pool: server
+    timeoutInMinutes: 4320
+    displayName: 'Deploy to Staging job'
+    steps:
+    - task: ManualValidation@0
+      timeoutInMinutes: 1440
+      inputs:
+        notifyUsers: 'pramodya.benjamin@sitecore.com'
+        instructions: 'Please validate the deployment to staging and approve or reject.'
+        onTimeout: 'resume'
